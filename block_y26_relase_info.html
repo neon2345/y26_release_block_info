@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Y26释放商圈全景可视化 (4-10月900商圈)</title>
+    <!-- 高德地图 API -->
+    <script src="https://webapi.amap.com/maps?v=2.0&key=05274d5027e6b22978b2ade4630f3596"></script>
+    <!-- 本地兜底数据脚本 (直接双击file:///打开时免疫跨域限制) -->
+    <script src="block_y26_release_info.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            color: #1e293b;
+        }
+        #container {
+            width: 100%; height: 100vh;
+            background: #f8fafc;
+        }
+
+        /* 左侧统一容器：保证筛选与图例自然垂直排布，彻底消除绝对定位重叠 */
+        .left-dock {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            width: 335px;
+            max-height: calc(100vh - 28px);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 999;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 3px;
+        }
+        .left-dock::-webkit-scrollbar { width: 5px; }
+        .left-dock::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .left-dock::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .filter-panel {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(10px);
+            padding: 15px 17px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.10);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            flex-shrink: 0;
+        }
+
+        .panel-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .panel-title span.sub {
+            font-size: 12px;
+            font-weight: normal;
+            color: #64748b;
+        }
+
+        /* 统计卡片 */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-item .num {
+            font-size: 16px;
+            font-weight: bold;
+            color: #0284c7;
+        }
+        .stat-item .num.green { color: #16a34a; }
+        .stat-item .num.purple { color: #7c3aed; }
+        .stat-item .label {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+        .stat-sub-bar {
+            font-size: 11px;
+            color: #64748b;
+            background: #fff;
+            padding: 5px 8px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-around;
+        }
+        .stat-sub-bar span strong { color: #0f172a; }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .filter-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .filter-select, .search-input {
+            width: 100%;
+            padding: 6px 10px;
+            font-size: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background-color: #fff;
+            color: #1e293b;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .filter-select:focus, .search-input:focus {
+            border-color: #0284c7;
+            box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+        }
+
+        /* 标签复选网格 */
+        .tag-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 5px;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11.5px;
+            color: #334155;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+            background: #fafafa;
+        }
+        .checkbox-label:hover {
+            background: #f1f5f9;
+        }
+        .checkbox-label input {
+            cursor: pointer;
+            margin: 0;
+        }
+        .tag-pill {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            border: 1px solid rgba(0,0,0,0.15);
+            flex-shrink: 0;
+        }
+
+        /* 按钮组 */
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+        }
+        .btn {
+            flex: 1;
+            padding: 7px 0;
+            font-size: 12.5px;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #0284c7;
+            color: #fff;
+        }
+        .btn-primary:hover { background: #0369a1; }
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #475569;
+        }
+        .btn-secondary:hover { background: #cbd5e1; }
+
+        /* 图例面板 (自然排布在筛选面板下方) */
+        .legend-panel {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(8px);
+            padding: 13px 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            font-size: 12px;
+            color: #334155;
+            flex-shrink: 0;
+        }
+        .legend-title {
+            font-weight: 700;
+            margin-bottom: 6px;
+            font-size: 12.5px;
+            color: #0f172a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .legend-section {
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 1px dashed #e2e8f0;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 4px 0;
+        }
+        .legend-color-box {
+            width: 18px;
+            height: 12px;
+            border-radius: 2px;
+            border: 1px solid rgba(0,0,0,0.25);
+            flex-shrink: 0;
+            transition: background 0.3s;
+        }
+
+        /* 右侧详情抽屉/信息卡片 */
+        .info-panel {
+            position: absolute;
+            top: 14px; right: 14px;
+            width: 360px;
+            max-height: calc(100vh - 28px);
+            background: rgba(255, 255, 255, 0.97);
+            backdrop-filter: blur(10px);
+            padding: 16px 18px;
+            border-radius: 12px;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            overflow-y: auto;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            display: none;
+            animation: slideIn 0.25s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(30px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .info-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 12px;
+        }
+        .info-h3-id {
+            font-size: 15px;
+            font-weight: 700;
+            color: #0f172a;
+            word-break: break-all;
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #94a3b8;
+            padding: 0 4px;
+            line-height: 1;
+        }
+        .close-btn:hover { color: #0f172a; }
+
+        .info-badge-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .badge {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+        .badge-intent-yes { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+        .badge-intent-no { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
+        .badge-conv-yes { background: #fae8ff; color: #86198f; border: 1px solid #f5d0fe; }
+        .badge-heat { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+        .badge-res-low { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+        .badge-res-high { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+
+        .info-section {
+            margin-bottom: 12px;
+            background: #f8fafc;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .info-sec-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #475569;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .info-row {
+            font-size: 12px;
+            line-height: 1.6;
+            display: flex;
+            justify-content: space-between;
+            color: #334155;
+            padding: 2px 0;
+            border-bottom: 1px dashed #f1f5f9;
+        }
+        .info-row:last-child { border-bottom: none; }
+        .info-k { color: #64748b; font-weight: 500; }
+        .info-v { font-weight: 600; text-align: right; max-width: 65%; word-break: break-word; }
+
+        .info-text-block {
+            font-size: 11.5px;
+            line-height: 1.5;
+            color: #475569;
+            background: #ffffff;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            white-space: pre-wrap;
+            max-height: 120px;
+            overflow-y: auto;
+            margin-top: 4px;
+        }
+
+        /* 加载状态指示器 */
+        .loading-mask {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255, 255, 255, 0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            font-size: 14px;
+            color: #0284c7;
+            font-weight: 600;
+        }
+        .spinner {
+            width: 36px; height: 36px;
+            border: 3px solid #e2e8f0;
+            border-top: 3px solid #0284c7;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 10px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div id="container"></div>
+
+<!-- 加载遮罩 -->
+<div id="loadingMask" class="loading-mask">
+    <div class="spinner"></div>
+    <div id="loadingText">正在初始化高德地图与 900 商圈数据...</div>
+</div>
+
+<!-- 左侧统一悬浮容器 (筛选面板 + 图例面板垂直流式排列，永不重叠) -->
+<div class="left-dock">
+    <!-- 筛选与控制面板 -->
+    <div class="filter-panel">
+    <div class="panel-title">
+        <span>📍 Y26 释放商圈全景</span>
+        <span class="sub">
+            4~10月释放复盘
+            <span style="color:#cbd5e1; margin:0 3px;">|</span>
+            <a href="javascript:void(0)" onclick="resetFilters()" style="color:#0284c7; text-decoration:none; font-weight:600; cursor:pointer;" title="重置全部筛选条件">重置</a>
+        </span>
+    </div>
+
+    <!-- 统计看板 -->
+    <div class="stat-grid">
+        <div class="stat-item">
+            <div class="num" id="statTotal">0</div>
+            <div class="label">当前匹配</div>
+        </div>
+        <div class="stat-item">
+            <div class="num green" id="statIntent">0</div>
+            <div class="label">有意向 (率)</div>
+        </div>
+        <div class="stat-item">
+            <div class="num purple" id="statConv">0</div>
+            <div class="label">已转正 (率)</div>
+        </div>
+    </div>
+    <!-- 渠道分布细分 -->
+    <div class="stat-sub-bar" id="statChannelBar">
+        <span>T: <strong id="statCntT">0</strong></span>
+        <span>M: <strong id="statCntM">0</strong></span>
+        <span>M+T: <strong id="statCntMT">0</strong></span>
+        <span style="border-left: 1px solid #cbd5e1; padding-left: 6px;">低阻力: <strong id="statCntLowRes" style="color:#047857;">0</strong></span>
+        <span style="border-left: 1px solid #cbd5e1; padding-left: 6px;">有剩容: <strong id="statCntHasLeftCap" style="color:#0284c7;">0</strong></span>
+    </div>
+
+    <!-- 快速搜索 -->
+    <div class="filter-group">
+        <input type="text" id="searchInput" class="search-input" placeholder="🔍 快速搜索 H3 编码或城市名..." />
+    </div>
+
+    <!-- M/T 渠道筛选 -->
+    <div class="filter-group">
+        <label class="filter-label">M/T 渠道类型</label>
+        <select id="mtFilter" class="filter-select">
+            <option value="">全部渠道 (M / T / M+T)</option>
+            <option value="T">🔷 T (邀请加盟) - 563个</option>
+            <option value="M">🔶 M (公开加盟) - 331个</option>
+            <option value="M+T">🟣 M+T (双选/复合) - 6个</option>
+        </select>
+    </div>
+
+    <!-- 大区联动 -->
+    <div class="filter-group">
+        <label class="filter-label">大区筛选</label>
+        <select id="zoneFilter" class="filter-select">
+            <option value="">全部大区 (全国)</option>
+        </select>
+    </div>
+
+    <!-- 省份联动 -->
+    <div class="filter-group">
+        <label class="filter-label">省份筛选</label>
+        <select id="provFilter" class="filter-select">
+            <option value="">全部省份</option>
+        </select>
+    </div>
+
+    <!-- 城市联动 -->
+    <div class="filter-group">
+        <label class="filter-label">城市筛选</label>
+        <select id="cityFilter" class="filter-select">
+            <option value="">全部城市</option>
+        </select>
+    </div>
+
+    <!-- 是否签约意向合同 -->
+    <div class="filter-group">
+        <label class="filter-label">是否签约意向合同</label>
+        <select id="intentFilter" class="filter-select">
+            <option value="">全部状态 (有/无意向)</option>
+            <option value="是">✅ 是 (签约意向数 > 0)</option>
+            <option value="否">❌ 否 (未签约意向 = 0)</option>
+        </select>
+    </div>
+
+    <!-- 意向是否转正 -->
+    <div class="filter-group">
+        <label class="filter-label">意向是否转正</label>
+        <select id="convFilter" class="filter-select">
+            <option value="">全部状态 (已/未转正)</option>
+            <option value="是">🎉 是 (转正签约数 > 0)</option>
+            <option value="否">⏳ 否 (未转正签约 = 0)</option>
+        </select>
+    </div>
+
+    <!-- 是否低签约阻力 -->
+    <div class="filter-group">
+        <label class="filter-label">是否低签约阻力</label>
+        <select id="resistanceFilter" class="filter-select">
+            <option value="">全部阻力状态</option>
+            <option value="低签约阻力">🟢 是 (低签约阻力 - 达标)</option>
+            <option value="较高签约阻力">⚪ 否 (较高签约阻力)</option>
+        </select>
+    </div>
+
+    <!-- 剩余容量筛选 -->
+    <div class="filter-group">
+        <label class="filter-label">剩余容量筛选 (left_capacity)</label>
+        <select id="leftCapFilter" class="filter-select">
+            <option value="">全部容量状态</option>
+            <option value="有剩余">📦 有剩余容量 (left_capacity > 0)</option>
+            <option value="已满额">🔒 无剩余容量 (left_capacity = 0)</option>
+            <option value="无数据">❓ 未收录底池</option>
+        </select>
+    </div>
+
+    <!-- 餐饮热力筛选 (锁定方案A) -->
+    <div class="filter-group">
+        <div class="filter-label">
+            <span>1.0 餐饮热力档位</span>
+            <span style="font-weight:normal; font-size:11px; color:#0284c7; cursor:pointer;" onclick="toggleAllCateringTags()">全选/反选</span>
+        </div>
+        <div class="tag-row">
+            <label class="checkbox-label">
+                <input type="checkbox" class="cat-checkbox" value="餐饮极热" checked />
+                <span class="tag-pill" id="pillExtreme"></span> 极热
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" class="cat-checkbox" value="餐饮高潜" checked />
+                <span class="tag-pill" id="pillPoten"></span> 高潜
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" class="cat-checkbox" value="餐饮高热" checked />
+                <span class="tag-pill" id="pillHigh"></span> 高热
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" class="cat-checkbox" value="餐饮温热" checked />
+                <span class="tag-pill" id="pillWarm"></span> 温热
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" class="cat-checkbox" value="餐饮低热" checked />
+                <span class="tag-pill" id="pillLow"></span> 低热
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" class="cat-checkbox" value="未知/未打标" checked />
+                <span class="tag-pill" id="pillUnk"></span> 未打标
+            </label>
+        </div>
+    </div>
+</div>
+
+<!-- 图例面板 (流式垂直排布在筛选面板下方，永不重叠) -->
+    <div class="legend-panel">
+        <div class="legend-title" onclick="toggleLegend()" style="cursor:pointer; user-select:none;">
+            <span>🎨 地图视觉映射与图例</span>
+            <span id="legendToggleBtn" style="font-size:11px; font-weight:normal; color:#0284c7;">收起 ▲</span>
+        </div>
+        <div id="legendContent">
+    
+    <div style="font-size:11px; color:#64748b; margin-bottom:4px;">餐饮热力填充色 (依次降档)：</div>
+    <div class="legend-item"><div class="legend-color-box" id="legendBoxExtreme"></div><span id="legendTextExtreme"><strong>餐饮极热</strong></span></div>
+    <div class="legend-item"><div class="legend-color-box" id="legendBoxPoten"></div><span id="legendTextPoten"><strong>餐饮高潜</strong></span></div>
+    <div class="legend-item"><div class="legend-color-box" id="legendBoxHigh"></div><span id="legendTextHigh"><strong>餐饮高热</strong></span></div>
+    <div class="legend-item"><div class="legend-color-box" id="legendBoxWarm"></div><span id="legendTextWarm"><strong>餐饮温热</strong></span></div>
+    <div class="legend-item"><div class="legend-color-box" id="legendBoxLow"></div><span id="legendTextLow"><strong>餐饮低热</strong></span></div>
+    <div class="legend-item"><div class="legend-color-box" id="legendBoxUnk"></div><span id="legendTextUnk"><strong>未知/未打标</strong></span></div>
+
+    <div class="legend-section">
+        <div style="font-size:11px; color:#64748b; margin-bottom:4px;">意向签约状态区分：</div>
+        <div class="legend-item">
+            <div class="legend-color-box" style="background:#fff; border: 2.5px solid #1B5E20;"></div>
+            <span><strong>粗实线边框 + 饱满填充</strong>：签约意向合同 > 0</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color-box" style="background:#fff; border: 1.5px dashed #78909C;"></div>
+            <span><strong>细虚线边框 + 浅淡透明</strong>：签约意向合同 = 0</span>
+        </div>
+    </div>
+
+    <div class="legend-section">
+        <div style="font-size:11px; color:#64748b; margin-bottom:4px;">M/T 渠道属性：</div>
+        <div style="font-size:11px; color:#475569; display:flex; gap:10px;">
+            <span>🔷 T: 邀请加盟</span>
+            <span>🔶 M: 公开加盟</span>
+            <span>🟣 M+T: 双选</span>
+        </div>
+    </div>
+
+    <div class="legend-section">
+        <div style="font-size:11px; color:#64748b; margin-bottom:4px;">签约阻力标签：</div>
+        <div style="font-size:11px; color:#475569; display:flex; gap:12px;">
+            <span>🟢 低签约阻力</span>
+            <span>⚪ 较高签约阻力</span>
+        </div>
+    </div>
+
+    <div class="legend-section">
+        <div style="font-size:11px; color:#64748b; margin-bottom:4px;">容量预估 (Y27底池)：</div>
+        <div style="font-size:11px; color:#475569; display:flex; gap:12px;">
+            <span>📦 有剩余容量 (剩>0)</span>
+            <span>🔒 已满额 (剩0)</span>
+        </div>
+    </div>
+</div>
+</div>
+</div>
+
+<!-- 右侧详情抽屉 -->
+<div id="infoPanel" class="info-panel">
+    <div class="info-header">
+        <div>
+            <div class="info-h3-id" id="detailH3">H3: -</div>
+            <div style="font-size: 11.5px; color: #64748b; margin-top: 2px;" id="detailRegion">-</div>
+        </div>
+        <button class="close-btn" onclick="closeInfoPanel()">×</button>
+    </div>
+
+    <div class="info-badge-row" id="detailBadges">
+        <!-- 徽章动态注入 (M/T, 意向, 转正, 热力, 签约阻力, 容量) -->
+    </div>
+
+    <!-- 签约与转正全景 -->
+    <div class="info-section">
+        <div class="info-sec-title">📝 签约意向与转正落地</div>
+        <div class="info-row"><span class="info-k">意向签约合同数</span><span class="info-v" id="detailIntentCnt">-</span></div>
+        <div class="info-row"><span class="info-k">意向合同编号</span><span class="info-v" id="detailIntentCode">-</span></div>
+        <div class="info-row"><span class="info-k">意向是否转正</span><span class="info-v" id="detailIsConv">-</span></div>
+        <div class="info-row"><span class="info-k">转正签约合同数</span><span class="info-v" id="detailFormalCnt">-</span></div>
+        <div class="info-row"><span class="info-k">转正合同编号</span><span class="info-v" id="detailFormalCode">-</span></div>
+    </div>
+
+    <!-- 释放批次与渠道详情 -->
+    <div class="info-section">
+        <div class="info-sec-title">📅 释放批次与 M/T 渠道</div>
+        <div class="info-row"><span class="info-k">M/T 渠道属性</span><span class="info-v" id="detailMt">-</span></div>
+        <div class="info-row"><span class="info-k">最新释放批次</span><span class="info-v" id="detailBatch">-</span></div>
+<!--        <div class="info-row"><span class="info-k">最新释放日期</span><span class="info-v" id="detailRelDate">-</span></div>-->
+        <div class="info-row"><span class="info-k">累计释放次数</span><span class="info-v" id="detailRelCount">-</span></div>
+    </div>
+
+    <!-- 商圈精细化画像 -->
+    <div class="info-section">
+        <div class="info-sec-title">🏷️ 精细化画像标签</div>
+        <div class="info-row"><span class="info-k">签约阻力评级</span><span class="info-v" id="detailResistance">-</span></div>
+        <div class="info-row" id="rowResistanceReason" style="display:none;"><span class="info-k">阻力未达标原因</span><span class="info-v" id="detailResistanceReason" style="color:#e11d48; font-size:11px; line-height:1.4;">-</span></div>
+        <div class="info-row"><span class="info-k">1.0 餐饮热力</span><span class="info-v" id="detailCatering">-</span></div>
+        <div class="info-row"><span class="info-k">2.1 汉堡品牌梯队</span><span class="info-v" id="detailBurger">-</span></div>
+        <div class="info-row"><span class="info-k">2.1 饮品品牌梯队</span><span class="info-v" id="detailDrink">-</span></div>
+        <div class="info-row"><span class="info-k">未转化点容比</span><span class="info-v" id="detailUnconv">-</span></div>
+        <div class="info-row"><span class="info-k">城市健康度</span><span class="info-v" id="detailHealth">-</span></div>
+        <div class="info-row"><span class="info-k">是否低质量 / 乡镇</span><span class="info-v" id="detailLowTown">-</span></div>
+        <div class="info-row"><span class="info-k">是否孤立商圈</span><span class="info-v" id="detailIso">-</span></div>
+        <div class="info-row"><span class="info-k">有效性 (if_valid)</span><span class="info-v" id="detailValid">-</span></div>
+        <div class="info-row"><span class="info-k">商圈内总体门店数</span><span class="info-v" id="detailTotalStores">-</span></div>
+        <div class="info-row"><span class="info-k">商圈总容量 (capacity_pred)</span><span class="info-v" id="detailCapacityPred">-</span></div>
+        <div class="info-row"><span class="info-k">商圈剩余容量 (left_capacity)</span><span class="info-v" id="detailLeftCapacity">-</span></div>
+    </div>
+
+    <!-- 放弃与作废退款诊断 -->
+    <div class="info-section">
+        <div class="info-sec-title">⚠️ 放弃原因标签</div>
+        <div id="detailGiveUp" class="info-text-block">无记录</div>
+    </div>
+    <div class="info-section">
+        <div class="info-sec-title">❌ 意向作废 / 退款原因</div>
+        <div id="detailCancel" class="info-text-block">无记录</div>
+    </div>
+</div>
+
+<script>
+    // 锁定方案A：高对比鲜明专业配色映射 (极热红·高潜紫·高热橙·温热黄·低热蓝·未打标灰)
+    const CATERING_COLOR_MAP = {
+        '餐饮极热': '#DC2626', // 烈焰正红 (Red 600)
+        '餐饮高潜': '#7C3AED', // 鲜明魅紫 (Purple 600) - 与红/橙形成高反差，一眼秒辨
+        '餐饮高热': '#F97316', // 明艳亮橙 (Orange 500)
+        '餐饮温热': '#EAB308', // 明亮金黄 (Yellow 500)
+        '餐饮低热': '#0284C7', // 清爽天蓝 (Sky 600)
+        '未知/未打标': '#94A3B8' // 浅中性灰
+    };
+
+    const currentColorMap = CATERING_COLOR_MAP;
+
+    let map = null;
+    let allData = [];
+    let allPolygons = []; // 存储所有 polygon 对象及其元数据
+    let activeInfoWindow = null;
+    let selectedItem = null;
+
+    // 筛选控件
+    const mtFilter = document.getElementById('mtFilter');
+    const zoneFilter = document.getElementById('zoneFilter');
+    const provFilter = document.getElementById('provFilter');
+    const cityFilter = document.getElementById('cityFilter');
+    const intentFilter = document.getElementById('intentFilter');
+    const convFilter = document.getElementById('convFilter');
+    const resistanceFilter = document.getElementById('resistanceFilter');
+    const leftCapFilter = document.getElementById('leftCapFilter');
+    const searchInput = document.getElementById('searchInput');
+
+    // 统计显示
+    const statTotal = document.getElementById('statTotal');
+    const statIntent = document.getElementById('statIntent');
+    const statConv = document.getElementById('statConv');
+    const statCntT = document.getElementById('statCntT');
+    const statCntM = document.getElementById('statCntM');
+    const statCntMT = document.getElementById('statCntMT');
+    const statCntLowRes = document.getElementById('statCntLowRes');
+    const statCntHasLeftCap = document.getElementById('statCntHasLeftCap');
+
+    // 1. 初始化地图与加载数据
+    let isInitialized = false;
+    async function init() {
+        if (isInitialized) return;
+        if (typeof AMap === 'undefined') {
+            console.warn('高德地图 SDK 尚未就绪，等待加载...');
+            setTimeout(init, 100);
+            return;
+        }
+        isInitialized = true;
+
+        try {
+            map = new AMap.Map('container', {
+                zoom: 5,
+                center: [108.9, 34.2], // 中国中心视角
+                viewMode: '2D'
+            });
+
+            // 点击地图空白处关闭抽屉
+            map.on('click', () => {
+                if (activeInfoWindow) activeInfoWindow.close();
+            });
+
+            // 初始化当前配色展示
+            applyPaletteUI();
+
+            // 尝试加载数据
+            await loadData();
+        } catch (err) {
+            console.error('地图或数据初始化发生异常:', err);
+            const txt = document.getElementById('loadingText');
+            if (txt) txt.textContent = '初始化发生异常: ' + (err && err.message ? err.message : err);
+        }
+    }
+
+    async function loadData() {
+        try {
+            // 优先检查全局注入的兜底数据（方便本地双击打开）
+            if (window.BLOCK_Y26_DATA && Array.isArray(window.BLOCK_Y26_DATA) && window.BLOCK_Y26_DATA.length > 0) {
+                console.log('成功读取本地预加载数据，商圈数:', window.BLOCK_Y26_DATA.length);
+                allData = window.BLOCK_Y26_DATA;
+            } else {
+                console.log('发起 fetch("block_y26_release_info.json") 请求...');
+                const resp = await fetch('block_y26_release_info.json');
+                allData = await resp.json();
+                console.log('成功异步获取 JSON 数据，商圈数:', allData.length);
+            }
+        } catch (e) {
+            console.error('加载 JSON 失败:', e);
+            alert('加载数据失败，请确认 block_y26_release_info.json 或 block_y26_release_info.js 已生成！\n' + e.message);
+            document.getElementById('loadingText').textContent = '数据加载失败，请检查控制台';
+            return;
+        }
+
+        document.getElementById('loadingText').textContent = `已载入 ${allData.length} 个商圈，正在渲染图层...`;
+        
+        // 构建筛选器下拉选项
+        buildFilterOptions();
+
+        // 绘制图层
+        renderMapPolygons();
+
+        // 隐藏遮罩
+        document.getElementById('loadingMask').style.display = 'none';
+
+        // 初始应用筛选
+        applyFilters();
+    }
+
+    // 2. 配色与图例同步 (锁定方案A，纯净无冗余文字)
+    function applyPaletteUI() {
+        // 更新复选框前的小色块
+        const setPill = (id, color) => { const el = document.getElementById(id); if (el) el.style.background = color; };
+        setPill('pillExtreme', currentColorMap['餐饮极热']);
+        setPill('pillPoten', currentColorMap['餐饮高潜']);
+        setPill('pillHigh', currentColorMap['餐饮高热']);
+        setPill('pillWarm', currentColorMap['餐饮温热']);
+        setPill('pillLow', currentColorMap['餐饮低热']);
+        setPill('pillUnk', currentColorMap['未知/未打标']);
+
+        // 更新左侧图例色块
+        const setBox = (id, color) => { const el = document.getElementById(id); if (el) el.style.background = color; };
+        setBox('legendBoxExtreme', currentColorMap['餐饮极热']);
+        setBox('legendBoxPoten', currentColorMap['餐饮高潜']);
+        setBox('legendBoxHigh', currentColorMap['餐饮高热']);
+        setBox('legendBoxWarm', currentColorMap['餐饮温热']);
+        setBox('legendBoxLow', currentColorMap['餐饮低热']);
+        setBox('legendBoxUnk', currentColorMap['未知/未打标']);
+    }
+
+    function updateBadgeColor(item) {
+        const cat = item.catering_tag || item['1.0_overall_catering_tag'] || '未知/未打标';
+        const color = currentColorMap[cat] || '#333';
+        const heatBadge = document.querySelector('.badge-heat');
+        if (heatBadge) {
+            heatBadge.style.color = color;
+            heatBadge.style.borderColor = color;
+        }
+    }
+
+    // 3. 构建下拉联动菜单
+    let provByZone = {};
+    let cityByProv = {};
+
+    function buildFilterOptions() {
+        const zoneSet = new Set();
+        provByZone = {};
+        cityByProv = {};
+
+        allData.forEach(item => {
+            const z = item.zone || '未知大区';
+            const p = item.prov || '未知省份';
+            const c = item.city || '未知城市';
+
+            zoneSet.add(z);
+
+            if (!provByZone[z]) provByZone[z] = new Set();
+            provByZone[z].add(p);
+
+            if (!cityByProv[p]) cityByProv[p] = new Set();
+            cityByProv[p].add(c);
+        });
+
+        // 填充大区
+        Array.from(zoneSet).sort().forEach(z => {
+            const opt = document.createElement('option');
+            opt.value = z; opt.textContent = z;
+            zoneFilter.appendChild(opt);
+        });
+
+        // 事件监听
+        mtFilter.addEventListener('change', applyFilters);
+        zoneFilter.addEventListener('change', () => {
+            updateProvOptions();
+            applyFilters();
+        });
+        provFilter.addEventListener('change', () => {
+            updateCityOptions();
+            applyFilters();
+        });
+        cityFilter.addEventListener('change', applyFilters);
+        intentFilter.addEventListener('change', applyFilters);
+        convFilter.addEventListener('change', applyFilters);
+        if (resistanceFilter) resistanceFilter.addEventListener('change', applyFilters);
+        if (leftCapFilter) leftCapFilter.addEventListener('change', applyFilters);
+        
+        // 搜索输入防抖
+        searchInput.addEventListener('input', debounce(applyFilters, 300));
+
+        // 餐饮热力复选框实时联动
+        document.querySelectorAll('.cat-checkbox').forEach(cb => {
+            cb.addEventListener('change', applyFilters);
+        });
+
+        updateProvOptions();
+    }
+
+    function updateProvOptions() {
+        const selectedZone = zoneFilter.value;
+        provFilter.innerHTML = '<option value="">全部省份</option>';
+        
+        let provs = new Set();
+        if (selectedZone) {
+            provs = provByZone[selectedZone] || new Set();
+        } else {
+            Object.values(provByZone).forEach(set => set.forEach(p => provs.add(p)));
+        }
+
+        Array.from(provs).sort().forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p; opt.textContent = p;
+            provFilter.appendChild(opt);
+        });
+
+        updateCityOptions();
+    }
+
+    function updateCityOptions() {
+        const selectedProv = provFilter.value;
+        const selectedZone = zoneFilter.value;
+        cityFilter.innerHTML = '<option value="">全部城市</option>';
+
+        let cities = new Set();
+        if (selectedProv) {
+            cities = cityByProv[selectedProv] || new Set();
+        } else if (selectedZone) {
+            const currentProvs = provByZone[selectedZone] || new Set();
+            currentProvs.forEach(p => {
+                const cSet = cityByProv[p] || new Set();
+                cSet.forEach(c => cities.add(c));
+            });
+        } else {
+            Object.values(cityByProv).forEach(set => set.forEach(c => cities.add(c)));
+        }
+
+        Array.from(cities).sort().forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c; opt.textContent = c;
+            cityFilter.appendChild(opt);
+        });
+    }
+
+    // 4. 渲染地图六边形多边形
+    function renderMapPolygons() {
+        allPolygons = [];
+
+        allData.forEach(item => {
+            if (!item.boundary || item.boundary.length === 0) return;
+
+            const catering = item.catering_tag || item['1.0_overall_catering_tag'] || '未知/未打标';
+            const baseColor = currentColorMap[catering] || '#94A3B8';
+            const hasIntent = item.intent_contract_num > 0;
+
+            // 视觉规则：区分签约意向合同数等于0和大于0的
+            let polygonOptions;
+            if (hasIntent) {
+                // 意向签约合同数 > 0: 实线粗边框 + 饱满色彩
+                polygonOptions = {
+                    path: item.boundary,
+                    fillColor: baseColor,
+                    fillOpacity: 0.72,
+                    strokeColor: '#1B5E20', // 深绿醒目实线边框
+                    strokeWeight: 2.8,
+                    strokeStyle: 'solid',
+                    cursor: 'pointer',
+                    zIndex: 50
+                };
+            } else {
+                // 签约意向合同数 == 0: 虚线细边框 + 淡色半透明淡化
+                polygonOptions = {
+                    path: item.boundary,
+                    fillColor: baseColor,
+                    fillOpacity: 0.22,
+                    strokeColor: '#78909C', // 虚线灰边框
+                    strokeWeight: 1.2,
+                    strokeStyle: 'dashed',
+                    strokeDasharray: [5, 4],
+                    cursor: 'pointer',
+                    zIndex: 10
+                };
+            }
+
+            const polygon = new AMap.Polygon(polygonOptions);
+
+            // 鼠标悬停高亮
+            polygon.on('mouseover', () => {
+                polygon.setOptions({
+                    fillOpacity: Math.min(polygonOptions.fillOpacity + 0.25, 0.95),
+                    strokeWeight: polygonOptions.strokeWeight + 1.5
+                });
+            });
+            polygon.on('mouseout', () => {
+                polygon.setOptions({
+                    fillOpacity: polygonOptions.fillOpacity,
+                    strokeWeight: polygonOptions.strokeWeight
+                });
+            });
+
+            // 点击查看详情
+            polygon.on('click', (e) => {
+                showPolygonDetail(item, e.lnglat);
+            });
+
+            allPolygons.push({
+                item: item,
+                polygon: polygon
+            });
+        });
+
+        // 一次性批量添加到地图
+        const polyList = allPolygons.map(p => p.polygon);
+        map.add(polyList);
+    }
+
+    // 5. 多维度筛选应用 (大区、省、市、MT、意向、转正、签约阻力、剩余容量、热力标签)
+    function applyFilters() {
+        const selMt = mtFilter.value;
+        const selZone = zoneFilter.value;
+        const selProv = provFilter.value;
+        const selCity = cityFilter.value;
+        const selIntent = intentFilter.value;
+        const selConv = convFilter.value;
+        const selResistance = resistanceFilter ? resistanceFilter.value : '';
+        const selLeftCap = leftCapFilter ? leftCapFilter.value : '';
+        const searchKw = searchInput.value.trim().toLowerCase();
+
+        // 选中的餐饮热力标签集合（若页面存在复选框才做过滤，否则默认全量展示）
+        const catCbs = document.querySelectorAll('.cat-checkbox');
+        let checkedCats = null;
+        if (catCbs.length > 0) {
+            checkedCats = new Set();
+            document.querySelectorAll('.cat-checkbox:checked').forEach(cb => {
+                checkedCats.add(cb.value);
+            });
+        }
+
+        let matchCount = 0;
+        let matchIntentCount = 0;
+        let matchConvCount = 0;
+        let cntT = 0, cntM = 0, cntMT = 0, cntLowRes = 0, cntHasLeftCap = 0;
+        const visiblePolygons = [];
+
+        allPolygons.forEach(({ item, polygon }) => {
+            let visible = true;
+
+            // M/T 渠道筛选
+            if (selMt && item.mt !== selMt) visible = false;
+
+            // 大区/省份/城市
+            if (visible && selZone && item.zone !== selZone) visible = false;
+            if (visible && selProv && item.prov !== selProv) visible = false;
+            if (visible && selCity && item.city !== selCity) visible = false;
+
+            // 是否签约意向合同 (是 / 否)
+            if (visible && selIntent) {
+                if (item.has_intent !== selIntent) visible = false;
+            }
+
+            // 意向是否转正 (是 / 否)
+            if (visible && selConv) {
+                if (item.intent_converted !== selConv) visible = false;
+            }
+
+            // 是否低签约阻力 (低签约阻力 / 较高签约阻力)
+            if (visible && selResistance) {
+                const isLow = (item.resistance_rating === '低签约阻力' || item.is_low_resistance === '是');
+                if (selResistance === '低签约阻力' || selResistance === '是') {
+                    if (!isLow) visible = false;
+                } else if (selResistance === '较高签约阻力' || selResistance === '否') {
+                    if (isLow) visible = false;
+                }
+            }
+
+            // 剩余容量筛选 (有剩余 / 已满额 / 无数据)
+            if (visible && selLeftCap) {
+                if (selLeftCap === '有剩余') {
+                    if (item.left_capacity === null || item.left_capacity === undefined || item.left_capacity <= 0) visible = false;
+                } else if (selLeftCap === '已满额') {
+                    if (item.left_capacity === null || item.left_capacity === undefined || item.left_capacity !== 0) visible = false;
+                } else if (selLeftCap === '无数据') {
+                    if (item.left_capacity !== null && item.left_capacity !== undefined) visible = false;
+                }
+            }
+
+            // 餐饮热力档位（若存在标签复选框则按勾选过滤）
+            if (visible && checkedCats !== null) {
+                const cat = item.catering_tag || item['1.0_overall_catering_tag'] || '未知/未打标';
+                if (!checkedCats.has(cat)) visible = false;
+            }
+
+            // 搜索关键字 (H3编码 或 城市名)
+            if (visible && searchKw) {
+                const h3Match = item.h3.toLowerCase().includes(searchKw);
+                const cityMatch = item.city.toLowerCase().includes(searchKw);
+                const provMatch = item.prov.toLowerCase().includes(searchKw);
+                if (!h3Match && !cityMatch && !provMatch) visible = false;
+            }
+
+            if (visible) {
+                polygon.show();
+                visiblePolygons.push(polygon);
+                matchCount++;
+                if (item.intent_contract_num > 0) matchIntentCount++;
+                if (item.formal_contract_num > 0) matchConvCount++;
+                
+                if (item.mt === 'T') cntT++;
+                else if (item.mt === 'M') cntM++;
+                else if (item.mt === 'M+T') cntMT++;
+
+                if (item.resistance_rating === '低签约阻力' || item.is_low_resistance === '是') {
+                    cntLowRes++;
+                }
+
+                if (item.left_capacity !== null && item.left_capacity !== undefined && item.left_capacity > 0) {
+                    cntHasLeftCap++;
+                }
+            } else {
+                polygon.hide();
+            }
+        });
+
+        // 更新统计看板
+        statTotal.textContent = `${matchCount} / ${allData.length}`;
+        const intentRate = matchCount > 0 ? (matchIntentCount / matchCount * 100).toFixed(1) : 0;
+        const convRate = matchIntentCount > 0 ? (matchConvCount / matchIntentCount * 100).toFixed(1) : 0;
+
+        statIntent.textContent = `${matchIntentCount} (${intentRate}%)`;
+        statConv.textContent = `${matchConvCount} (${convRate}%)`;
+        
+        statCntT.textContent = cntT;
+        statCntM.textContent = cntM;
+        statCntMT.textContent = cntMT;
+        if (statCntLowRes) statCntLowRes.textContent = cntLowRes;
+        if (statCntHasLeftCap) statCntHasLeftCap.textContent = cntHasLeftCap;
+
+        // 视角自适应
+        if (visiblePolygons.length > 0 && (selZone || selProv || selCity || searchKw)) {
+            map.setFitView(visiblePolygons, false, [40, 40, 40, 40]);
+        }
+    }
+
+    // 6. 重置筛选条件
+    function resetFilters() {
+        mtFilter.value = '';
+        zoneFilter.value = '';
+        updateProvOptions();
+        provFilter.value = '';
+        updateCityOptions();
+        cityFilter.value = '';
+        intentFilter.value = '';
+        convFilter.value = '';
+        if (resistanceFilter) resistanceFilter.value = '';
+        if (leftCapFilter) leftCapFilter.value = '';
+        searchInput.value = '';
+
+        applyFilters();
+        map.setZoomAndCenter(5, [108.9, 34.2]);
+        closeInfoPanel();
+    }
+
+    // 餐饮标签全选/反选
+    function toggleAllCateringTags() {
+        const cbs = document.querySelectorAll('.cat-checkbox');
+        const anyUnchecked = Array.from(cbs).some(cb => !cb.checked);
+        cbs.forEach(cb => cb.checked = anyUnchecked);
+        applyFilters();
+    }
+
+    // 7. 展示商圈详情
+    function showPolygonDetail(item, clickLngLat) {
+        selectedItem = item;
+        // 打开右侧详情抽屉
+        const panel = document.getElementById('infoPanel');
+        panel.style.display = 'block';
+
+        document.getElementById('detailH3').textContent = item.h3;
+        document.getElementById('detailRegion').textContent = `${item.zone} · ${item.prov} · ${item.city} ${item.branch ? `(${item.branch})` : ''}`;
+
+        // 徽章
+        const badgeBox = document.getElementById('detailBadges');
+        badgeBox.innerHTML = '';
+        
+        // M/T 渠道徽章
+        const mtBadge = document.createElement('span');
+        mtBadge.className = 'badge';
+        if (item.mt === 'T') {
+            mtBadge.style.background = '#e0f2fe';
+            mtBadge.style.color = '#0369a1';
+            mtBadge.style.border = '1px solid #bae6fd';
+            mtBadge.textContent = '🔷 T (邀请加盟)';
+        } else if (item.mt === 'M') {
+            mtBadge.style.background = '#ffedd5';
+            mtBadge.style.color = '#c2410c';
+            mtBadge.style.border = '1px solid #fed7aa';
+            mtBadge.textContent = '🔶 M (公开加盟)';
+        } else {
+            mtBadge.style.background = '#f3e8ff';
+            mtBadge.style.color = '#7e22ce';
+            mtBadge.style.border = '1px solid #e9d5ff';
+            mtBadge.textContent = '🟣 M+T (双选)';
+        }
+        badgeBox.appendChild(mtBadge);
+
+        // 意向徽章
+        const intentBadge = document.createElement('span');
+        if (item.intent_contract_num > 0) {
+            intentBadge.className = 'badge badge-intent-yes';
+            intentBadge.textContent = `✅ 意向已签 ${item.intent_contract_num} 份`;
+        } else {
+            intentBadge.className = 'badge badge-intent-no';
+            intentBadge.textContent = '❌ 未签意向';
+        }
+        badgeBox.appendChild(intentBadge);
+
+        // 转正徽章
+        if (item.formal_contract_num > 0) {
+            const convBadge = document.createElement('span');
+            convBadge.className = 'badge badge-conv-yes';
+            convBadge.textContent = `🎉 转正落地 ${item.formal_contract_num} 家`;
+            badgeBox.appendChild(convBadge);
+        }
+
+        // 热力徽章
+        const cat = item.catering_tag || item['1.0_overall_catering_tag'] || '未知/未打标';
+        const heatColor = currentColorMap[cat] || '#333';
+        const heatBadge = document.createElement('span');
+        heatBadge.className = 'badge badge-heat';
+        heatBadge.style.color = heatColor;
+        heatBadge.style.borderColor = heatColor;
+        heatBadge.textContent = `🔥 ${cat}`;
+        badgeBox.appendChild(heatBadge);
+
+        // 签约阻力徽章
+        const isLowRes = (item.resistance_rating === '低签约阻力' || item.is_low_resistance === '是');
+        const resBadge = document.createElement('span');
+        resBadge.className = isLowRes ? 'badge badge-res-low' : 'badge badge-res-high';
+        resBadge.textContent = isLowRes ? '🟢 低签约阻力' : '⚪ 较高签约阻力';
+        badgeBox.appendChild(resBadge);
+
+        // 容量徽章
+        const capBadge = document.createElement('span');
+        if (item.left_capacity !== null && item.left_capacity !== undefined) {
+            if (item.left_capacity > 0) {
+                capBadge.className = 'badge';
+                capBadge.style.background = '#f0fdf4';
+                capBadge.style.color = '#15803d';
+                capBadge.style.border = '1px solid #bbf7d0';
+                capBadge.textContent = `📦 剩 ${item.left_capacity} / 总 ${item.capacity_pred || '-'}`;
+            } else {
+                capBadge.className = 'badge';
+                capBadge.style.background = '#f8fafc';
+                capBadge.style.color = '#64748b';
+                capBadge.style.border = '1px solid #e2e8f0';
+                capBadge.textContent = `🔒 满额 (总${item.capacity_pred || '-'}/剩0)`;
+            }
+        } else {
+            capBadge.className = 'badge';
+            capBadge.style.background = '#f8fafc';
+            capBadge.style.color = '#94a3b8';
+            capBadge.style.border = '1px solid #e2e8f0';
+            capBadge.textContent = `📦 容量未收录`;
+        }
+        badgeBox.appendChild(capBadge);
+
+        // 安全设值辅助函数（防止 DOM 节点被注释或删除时抛出 TypeError 阻断后续代码执行）
+        const setSafeText = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = (val !== undefined && val !== null && val !== '') ? val : '-';
+        };
+
+        // 详细数据绑定
+        setSafeText('detailIntentCnt', `${item.intent_contract_num} 份`);
+        setSafeText('detailIntentCode', item.intent_contracts || '无');
+        setSafeText('detailIsConv', item.intent_converted === '是' ? '是 (已转正)' : '否');
+        setSafeText('detailFormalCnt', `${item.formal_contract_num} 家`);
+        setSafeText('detailFormalCode', item.formal_contracts || '无');
+
+        setSafeText('detailMt', item.mt_label || item.channel_type || '-');
+        setSafeText('detailBatch', item.latest_batch || '-');
+        setSafeText('detailRelDate', item.release_date || '-');
+        setSafeText('detailRelCount', `${item.release_count} 次`);
+
+        setSafeText('detailResistance', isLowRes ? '🟢 低签约阻力 (符合释放标准)' : '⚪ 较高签约阻力');
+        const resRow = document.getElementById('rowResistanceReason');
+        if (resRow) {
+            const failReason = item.resistance_fail_reason || item['签约阻力未达标原因'];
+            if (!isLowRes && failReason && failReason !== '达标(低签约阻力)') {
+                resRow.style.display = 'flex';
+                setSafeText('detailResistanceReason', failReason);
+            } else {
+                resRow.style.display = 'none';
+            }
+        }
+
+        setSafeText('detailCatering', cat);
+        setSafeText('detailBurger', item.burger_brand_tier || '-');
+        setSafeText('detailDrink', item.drink_brand_tier || '-');
+        setSafeText('detailUnconv', item.unconverted_ratio !== null ? item.unconverted_ratio : '无数据');
+        setSafeText('detailHealth', item.city_health || '-');
+        setSafeText('detailLowTown', `低质量: ${item.if_low_quality === 1 ? '是' : '否'} | 乡镇: ${item.if_town === 1 ? '是' : '否'}`);
+        setSafeText('detailIso', item.if_isolated || '否');
+        setSafeText('detailValid', item.if_valid !== null ? (item.if_valid === 1 ? '有效 (1)' : '无效 (0)') : '-');
+        setSafeText('detailTotalStores', (item.total_stores !== undefined ? item.total_stores : (item['商圈内的总体门店数'] || 0)) + ' 家');
+
+        // 总容量与剩余容量 (取自 Y27容量预估/block_10167_1109.xlsx)
+        if (item.capacity_pred !== null && item.capacity_pred !== undefined) {
+            setSafeText('detailCapacityPred', `${item.capacity_pred} 家`);
+        } else {
+            setSafeText('detailCapacityPred', '无底池数据');
+        }
+
+        const leftCapEl = document.getElementById('detailLeftCapacity');
+        if (leftCapEl) {
+            if (item.left_capacity !== null && item.left_capacity !== undefined) {
+                if (item.left_capacity > 0) {
+                    leftCapEl.innerHTML = `<strong style="color:#16a34a;">${item.left_capacity} 家</strong> <span style="font-size:11px; color:#15803d;">(有拓店空间)</span>`;
+                } else {
+                    leftCapEl.innerHTML = `<strong style="color:#64748b;">0 家</strong> <span style="font-size:11px; color:#94a3b8;">(已饱和)</span>`;
+                }
+            } else {
+                leftCapEl.textContent = '无底池数据';
+            }
+        }
+
+        // 放弃与作废原因
+        setSafeText('detailGiveUp', item.give_up_reason || '无记录');
+        setSafeText('detailCancel', item.cancel_refund_reason || '无记录');
+
+        // 地图弹窗 InfoWindow
+        if (!clickLngLat) {
+            clickLngLat = getPolygonCenter(item.boundary);
+        }
+        const resHtml = isLowRes ? '<span style="color:#047857; font-weight:600;">🟢 低签约阻力</span>' : '<span style="color:#64748b; font-weight:600;">⚪ 较高签约阻力</span>';
+        
+        let capHtml = '<span style="color:#94a3b8;">无底池数据</span>';
+        if (item.capacity_pred !== null && item.capacity_pred !== undefined) {
+            const leftStr = item.left_capacity > 0 
+                ? `<span style="color:#16a34a; font-weight:700;">${item.left_capacity} 家</span>` 
+                : `<span style="color:#64748b;">0 家(满)</span>`;
+            capHtml = `总 <strong>${item.capacity_pred} 家</strong> / 剩 ${leftStr}`;
+        }
+
+        const infoHtml = `
+            <div style="font-size:12.5px; line-height:1.6; padding:4px 6px;">
+                <div style="font-weight:bold; color:#0f172a; margin-bottom:4px;">${item.city} · ${item.h3.substring(0, 8)}...</div>
+                <div>渠道类型: <strong>${item.mt_label || item.channel_type || '-'}</strong></div>
+                <div>签约阻力: ${resHtml}</div>
+                <div>总体门店数: <strong>${item.total_stores !== undefined ? item.total_stores : 0} 家</strong></div>
+                <div>商圈容量: <strong>${capHtml}</strong></div>
+                <div>意向合同: <strong>${item.intent_contract_num > 0 ? `<span style="color:#16a34a;">${item.intent_contract_num}份 (已签)</span>` : '<span style="color:#64748b;">未签(0份)</span>'}</strong></div>
+                <div>转正状态: <strong>${item.intent_converted === '是' ? `<span style="color:#9333ea;">已转正(${item.formal_contract_num}家)</span>` : '未转正'}</strong></div>
+                <div>餐饮热力: <strong style="color:${heatColor}">${cat}</strong></div>
+                <div style="font-size:11px; color:#64748b; margin-top:4px;">详细信息已在右侧面板展开</div>
+            </div>
+        `;
+        if (activeInfoWindow) activeInfoWindow.close();
+        activeInfoWindow = new AMap.InfoWindow({
+            content: infoHtml,
+            offset: new AMap.Pixel(0, -10)
+        });
+        activeInfoWindow.open(map, clickLngLat);
+    }
+
+    function closeInfoPanel() {
+        document.getElementById('infoPanel').style.display = 'none';
+        if (activeInfoWindow) activeInfoWindow.close();
+    }
+
+    function getPolygonCenter(boundary) {
+        let lngSum = 0, latSum = 0;
+        boundary.forEach(p => { lngSum += p[0]; latSum += p[1]; });
+        return new AMap.LngLat(lngSum / boundary.length, latSum / boundary.length);
+    }
+
+    function debounce(func, delay) {
+        let timer;
+        return function(...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => func.apply(this, args), delay);
+        };
+    }
+
+    // 图例面板折叠/展开
+    function toggleLegend() {
+        const content = document.getElementById('legendContent');
+        const btn = document.getElementById('legendToggleBtn');
+        if (!content) return;
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            if (btn) btn.textContent = '收起 ▲';
+        } else {
+            content.style.display = 'none';
+            if (btn) btn.textContent = '展开 ▼';
+        }
+    }
+
+    // 页面加载完成后启动 (兼顾 DOM 结构与外部 SDK 资源加载)
+    window.addEventListener('DOMContentLoaded', init);
+    window.addEventListener('load', init);
+</script>
+</body>
+</html>
