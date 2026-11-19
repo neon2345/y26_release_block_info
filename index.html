@@ -417,8 +417,8 @@
         <span>T: <strong id="statCntT">0</strong></span>
         <span>M: <strong id="statCntM">0</strong></span>
         <span>M+T: <strong id="statCntMT">0</strong></span>
-        <span style="border-left: 1px solid #cbd5e1; padding-left: 6px;">低阻力: <strong id="statCntLowRes" style="color:#047857;">0</strong></span>
-        <span style="border-left: 1px solid #cbd5e1; padding-left: 6px;">有剩容: <strong id="statCntHasLeftCap" style="color:#0284c7;">0</strong></span>
+        <!-- <span style="border-left: 1px solid #cbd5e1; padding-left: 6px;">低阻力: <strong id="statCntLowRes" style="color:#047857;">0</strong></span> -->
+        <!-- <span style="border-left: 1px solid #cbd5e1; padding-left: 6px;">有剩容: <strong id="statCntHasLeftCap" style="color:#0284c7;">0</strong></span> -->
     </div>
 
     <!-- 快速搜索 -->
@@ -491,16 +491,16 @@
         </select>
     </div>
 
-    <!-- <!-- 剩余容量筛选 -->
-    <div class="filter-group">
-        <label class="filter-label">剩余容量筛选 (left_capacity)</label>
-        <select id="leftCapFilter" class="filter-select">
-            <option value="">全部容量状态</option>
-            <option value="有剩余">📦 有剩余容量 (left_capacity > 0)</option>
-            <option value="已满额">🔒 无剩余容量 (left_capacity = 0)</option>
-            <option value="无数据">❓ 未收录底池</option>
-        </select>
-    </div> -->
+    <!-- 剩余容量筛选 -->
+    <!-- <div class="filter-group"> -->
+        <!-- <label class="filter-label">剩余容量筛选 (left_capacity)</label> -->
+        <!-- <select id="leftCapFilter" class="filter-select"> -->
+            <!-- <option value="">全部容量状态</option> -->
+            <!-- <option value="有剩余">📦 有剩余容量 (left_capacity > 0)</option> -->
+            <!-- <option value="已满额">🔒 无剩余容量 (left_capacity = 0)</option> -->
+            <!-- <option value="无数据">❓ 未收录底池</option> -->
+        <!-- </select> -->
+    <!-- </div> -->
 
     <!-- 餐饮热力筛选 (锁定方案A) -->
     <div class="filter-group">
@@ -1029,15 +1029,15 @@
             }
 
             // 剩余容量筛选 (有剩余 / 已满额 / 无数据)
-            if (visible && selLeftCap) {
-                if (selLeftCap === '有剩余') {
-                    if (item.left_capacity === null || item.left_capacity === undefined || item.left_capacity <= 0) visible = false;
-                } else if (selLeftCap === '已满额') {
-                    if (item.left_capacity === null || item.left_capacity === undefined || item.left_capacity !== 0) visible = false;
-                } else if (selLeftCap === '无数据') {
-                    if (item.left_capacity !== null && item.left_capacity !== undefined) visible = false;
-                }
-            }
+            // if (visible && selLeftCap) {
+            //     if (selLeftCap === '有剩余') {
+            //         if (item.left_capacity === null || item.left_capacity === undefined || item.left_capacity <= 0) visible = false;
+            //     } else if (selLeftCap === '已满额') {
+            //         if (item.left_capacity === null || item.left_capacity === undefined || item.left_capacity !== 0) visible = false;
+            //     } else if (selLeftCap === '无数据') {
+            //         if (item.left_capacity !== null && item.left_capacity !== undefined) visible = false;
+            //     }
+            // }
 
             // 餐饮热力档位（若存在标签复选框则按勾选过滤）
             if (visible && checkedCats !== null) {
